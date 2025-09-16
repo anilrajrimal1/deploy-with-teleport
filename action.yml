@@ -3,20 +3,55 @@ description: "Deploys a Docker Compose to a remote server over Teleport (TSH)"
 author: "Anil Raj Rimal"
 
 inputs:
-  teleport_host:
+  TELEPORT_HOST:
     description: "Teleport proxy host (e.g., teleport.example.com:443)"
     required: true
 
-  teleport_token:
+  TELEPORT_TOKEN:
     description: "Teleport short-lived join token"
     required: true
 
-  ssh_user:
+  SSH_USER:
     description: "SSH username on the target machine"
     required: true
 
-  ssh_host:
-    description: "Server's hostname (not IP!)"
+  SSH_HOST:
+    description: "Server's Hostname (not IP!)"
+    required: true
+
+  BRANCH_NAME:
+    description: "Workflow Triggering Branch"
+    required: true
+
+  PROJECT_DIR:
+    description: "Directory on the server where files should be deployed"
+    required: true
+
+  COMPOSE_FILE_PATH:
+    description: "Path to the Docker Compose file to copy from"
+    required: false
+    default: "./docker/server/"
+
+  ENV_FILE:
+    description: "Path to the .env file"
+    required: true
+    default: "."
+
+  AWS_ACCESS_KEY_ID:
+    description: "AWS Access Key ID"
+    required: true
+
+  AWS_SECRET_ACCESS_KEY:
+    description: "AWS Secret Access Key"
+    required: true
+
+  AWS_REGION:
+    description: "AWS region for ECR login"
+    required: true
+    default: "ap-south-1"
+
+  ECR_REGISTRY:
+    description: "AWS ECR registry URL"
     required: true
 
 outputs:
@@ -27,6 +62,10 @@ outputs:
 runs:
   using: "composite"
   steps:
+  - name: Checkout Repository
+    uses: actions/checkout@v5
+    with:
+      ref: ${{ inputs.BRANCH_NAME }}
 
   - name: Install Teleport CLI
     uses: teleport-actions/setup@v1
@@ -37,10 +76,21 @@ runs:
     id: teleport-auth
     uses: teleport-actions/auth@v2
     with:
-      proxy: ${{ inputs.teleport_host }}
-      token: ${{ inputs.teleport_token }}
+      proxy: ${{ inputs.TELEPORT_HOST }}
+      token: ${{ inputs.TELEPORT_TOKEN }}
       certificate-ttl: 2h
       anonymous-telemetry: 0
+
+  - name: Configure AWS credentials
+    uses: aws-actions/configure-aws-credentials@v5
+    with:
+      aws-access-key-id: ${{ inputs.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ inputs.AWS_SECRET_ACCESS_KEY }}
+      aws-region: ${{ inputs.AWS_REGION }}
+
+  - name: Login to Amazon ECR
+    id: login-ecr
+    uses: aws-actions/amazon-ecr-login@v2
 
 branding:
   icon: "cloud"
