@@ -7,6 +7,18 @@ inputs:
     description: "Teleport proxy host (e.g., teleport.example.com:443)"
     required: true
 
+  teleport_token:
+    description: "Teleport short-lived join token"
+    required: true
+
+  ssh_user:
+    description: "SSH username on the target machine"
+    required: true
+
+  ssh_host:
+    description: "Server's hostname (not IP!)"
+    required: true
+
 outputs:
   status:
     description: "Deployment status"
@@ -20,6 +32,15 @@ runs:
     uses: teleport-actions/setup@v1
     with:
       version: 14.3.19
+
+  - name: Authenticate with Teleport
+    id: teleport-auth
+    uses: teleport-actions/auth@v2
+    with:
+      proxy: ${{ inputs.teleport_host }}
+      token: ${{ inputs.teleport_token }}
+      certificate-ttl: 2h
+      anonymous-telemetry: 0
 
 branding:
   icon: "cloud"
