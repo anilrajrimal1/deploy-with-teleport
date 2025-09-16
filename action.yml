@@ -1,0 +1,26 @@
+name: "Teleport Docker Deploy"
+description: "Deploys a Docker Compose to a remote server over Teleport (TSH)"
+author: "Anil Raj Rimal"
+
+inputs:
+  teleport_host:
+    description: "Teleport proxy host (e.g., teleport.example.com:443)"
+    required: true
+
+outputs:
+  status:
+    description: "Deployment status"
+    value: ${{ steps.deploy.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+
+  - name: Install Teleport CLI
+    uses: teleport-actions/setup@v1
+    with:
+      version: 14.3.19
+
+branding:
+  icon: "cloud"
+  color: "blue"
