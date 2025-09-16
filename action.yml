@@ -32,6 +32,23 @@ inputs:
     required: false
     default: "./docker/server/"
 
+  PHASE_SERVICE_TOKEN:
+    required: true
+    description: "Phase Token for Service Account"
+
+  PHASE_APP_ID:
+    required: true
+    description: "The Unique Identifier for the Projects in Phase"
+
+  PHASE_HOST:
+    required: false
+    default: 'https://phase.naxa.com.np'
+    description: "Only required for self-hosted one"
+
+  PHASE_ENV:
+    required: true
+    description: "Environment name to fetch secrets for (e.g., develop, staging, master)."
+
   ENV_FILE:
     description: "Path to the .env file"
     required: true
@@ -91,6 +108,14 @@ runs:
   - name: Login to Amazon ECR
     id: login-ecr
     uses: aws-actions/amazon-ecr-login@v2
+
+  - name: Generate env from Phase
+    uses: naxa-developers/gh-workflows/.github/actions/phase_env_fetch@master
+    with:
+      phase_service_token: ${{ inputs.PHASE_SERVICE_TOKEN }}
+      phase_app_id: ${{ inputs.PHASE_APP_ID }}
+      phase_env: ${{ inputs.PHASE_ENV }}
+      phase_host: ${{ inputs.PHASE_HOST }}
 
 branding:
   icon: "cloud"
