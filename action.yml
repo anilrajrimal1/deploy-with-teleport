@@ -117,6 +117,34 @@ runs:
       phase_env: ${{ inputs.PHASE_ENV }}
       phase_host: ${{ inputs.PHASE_HOST }}
 
+  - name: Copy Compose File to Root
+    shell: bash
+    run: |
+      cp ${{ inputs.COMPOSE_FILE_PATH }}docker-compose.${{ inputs.BRANCH_NAME }}.yml docker-compose.yml
+
+  - name: Pull image and Deploy
+    id: deploy
+    shell: bash
+    run: |
+      echo "Copying files to remote server..."
+      tsh scp -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" .env "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}:${{ inputs.PROJECT_DIR }}/.env"
+      tsh scp -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" docker-compose.yml "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}:${{ inputs.PROJECT_DIR }}/docker-compose.yml"
+
+      echo "Fetching ECR login credentials..."
+      ECR_PASS=$(aws ecr get-login-password --region "${{ inputs.AWS_REGION }}")
+
+      echo "Deploying on remote server..."
+      tsh ssh -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}" << EOF
+        set -e
+        cd "${{ inputs.PROJECT_DIR }}"
+        echo "\$ECR_PASS" | docker login --username AWS --password-stdin "${{ inputs.ECR_REGISTRY }}"
+        docker compose --file docker-compose.yml pull
+        docker compose up -d --build --force-recreate
+        echo "Containers are up and running!"
+        exit 0
+      EOF
+      echo "status=success" >> "$GITHUB_OUTPUT"
+
 branding:
   icon: "cloud"
   color: "blue"
