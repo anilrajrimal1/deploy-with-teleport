@@ -140,8 +140,11 @@ runs:
         echo "$ECR_PASS" | docker login --username AWS --password-stdin "${{ inputs.ECR_REGISTRY }}"
         docker compose --file docker-compose.yml pull
         docker compose up -d --build --force-recreate
+        if [ $? -ne 0 ]; then
+          echo "Error: Docker compose failed."
+          exit 1
+        fi
         echo "Containers are up and running!"
-        exit 0
       EOF
       echo "status=success" >> "$GITHUB_OUTPUT"
 
