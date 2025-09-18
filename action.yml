@@ -87,11 +87,11 @@ runs:
   - name: Install Teleport CLI
     uses: teleport-actions/setup@v1
     with:
-      version: 18.2.1
+      version: 14.3.19
 
   - name: Authenticate with Teleport
     id: teleport-auth
-    uses: teleport-actions/auth@v2
+    uses: teleport-actions/auth@v1
     with:
       proxy: ${{ inputs.TELEPORT_HOST }}
       token: ${{ inputs.TELEPORT_TOKEN }}
