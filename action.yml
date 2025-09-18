@@ -137,7 +137,7 @@ runs:
       tsh ssh -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOSTNAME }}" << EOF
         set -e
         cd "${{ inputs.PROJECT_DIR }}"
-        echo "\$ECR_PASS" | docker login --username AWS --password-stdin "${{ inputs.ECR_REGISTRY }}"
+        echo "$ECR_PASS" | docker login --username AWS --password-stdin "${{ inputs.ECR_REGISTRY }}"
         docker compose --file docker-compose.yml pull
         docker compose up -d --build --force-recreate
         echo "Containers are up and running!"
