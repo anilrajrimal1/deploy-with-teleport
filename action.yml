@@ -87,7 +87,7 @@ runs:
   - name: Install Teleport CLI
     uses: teleport-actions/setup@v1
     with:
-      version: 14.3.19
+      version: 18.2.1
 
   - name: Authenticate with Teleport
     id: teleport-auth
