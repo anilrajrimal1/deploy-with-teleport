@@ -15,7 +15,7 @@ inputs:
     description: "SSH username on the target machine"
     required: true
 
-  SSH_HOST:
+  SSH_HOSTNAME:
     description: "Server's Hostname (not IP!)"
     required: true
 
