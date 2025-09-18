@@ -145,6 +145,7 @@ runs:
           exit 1
         fi
         echo "Containers are up and running!"
+        exit 0
       EOF
       echo "status=success" >> "$GITHUB_OUTPUT"
 
