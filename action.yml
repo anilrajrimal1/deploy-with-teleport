@@ -15,7 +15,7 @@ inputs:
     description: "SSH username on the target machine"
     required: true
 
-  SSH_HOSTNAME:
+  SSH_HOSTNAMENAME:
     description: "Server's Hostname (not IP!)"
     required: true
 
@@ -127,14 +127,14 @@ runs:
     shell: bash
     run: |
       echo "Copying files to remote server..."
-      tsh scp -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" .env "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}:${{ inputs.PROJECT_DIR }}/.env"
-      tsh scp -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" docker-compose.yml "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}:${{ inputs.PROJECT_DIR }}/docker-compose.yml"
+      tsh scp -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" .env "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOSTNAME }}:${{ inputs.PROJECT_DIR }}/.env"
+      tsh scp -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" docker-compose.yml "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOSTNAME }}:${{ inputs.PROJECT_DIR }}/docker-compose.yml"
 
       echo "Fetching ECR login credentials..."
       ECR_PASS=$(aws ecr get-login-password --region "${{ inputs.AWS_REGION }}")
 
       echo "Deploying on remote server..."
-      tsh ssh -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}" << EOF
+      tsh ssh -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOSTNAME }}" << EOF
         set -e
         cd "${{ inputs.PROJECT_DIR }}"
         echo "\$ECR_PASS" | docker login --username AWS --password-stdin "${{ inputs.ECR_REGISTRY }}"
