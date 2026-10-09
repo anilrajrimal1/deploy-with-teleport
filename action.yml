@@ -1,5 +1,5 @@
 name: "Teleport Docker Deploy"
-description: "Deploys a Docker Compose to a remote server over Teleport (TSH)"
+description: "Deploys a Docker Compose stack to a remote server over Teleport (tsh), with no open SSH port"
 author: "Anil Raj Rimal"
 
 inputs:
@@ -8,68 +8,77 @@ inputs:
     required: true
 
   TELEPORT_TOKEN:
-    description: "Teleport short-lived join token"
+    description: "Name of the Teleport join token (GitHub join method) the runner uses to authenticate"
     required: true
+
+  TELEPORT_VERSION:
+    description: "Teleport CLI version to install"
+    required: false
+    default: "14.3.19"
 
   SSH_USER:
     description: "SSH username on the target machine"
     required: true
 
-  SSH_HOSTNAMENAME:
-    description: "Server's Hostname (not IP!)"
+  SSH_HOSTNAME:
+    description: "Target node's Teleport hostname (not its IP)"
     required: true
 
   BRANCH_NAME:
-    description: "Workflow Triggering Branch"
+    description: "Branch to check out; also selects docker-compose.<branch>.yml"
     required: true
 
   PROJECT_DIR:
-    description: "Directory on the server where files should be deployed"
+    description: "Directory on the server where files are deployed"
     required: true
 
   COMPOSE_FILE_PATH:
-    description: "Path to the Docker Compose file to copy from"
+    description: "Directory that holds the docker-compose.<branch>.yml files"
     required: false
     default: "./docker/server/"
 
-  PHASE_SERVICE_TOKEN:
-    required: true
-    description: "Phase Token for Service Account"
-
-  PHASE_APP_ID:
-    required: true
-    description: "The Unique Identifier for the Projects in Phase"
-
-  PHASE_HOST:
-    required: false
-    default: 'https://console.phase.dev'
-    description: "Only required for self-hosted one"
-
-  PHASE_ENV:
-    required: true
-    description: "Environment name to fetch secrets for (e.g., develop, staging, master)."
-
-  ENV_FILE:
-    description: "Path to the .env file"
-    required: true
-    default: "."
-
-  AWS_ACCESS_KEY_ID:
-    description: "AWS Access Key ID"
-    required: true
-
-  AWS_SECRET_ACCESS_KEY:
-    description: "AWS Secret Access Key"
-    required: true
-
   AWS_REGION:
     description: "AWS region for ECR login"
-    required: true
+    required: false
     default: "ap-south-1"
 
+  AWS_ROLE_ARN:
+    description: "IAM role to assume through GitHub OIDC (recommended). Needs `permissions: id-token: write` in the workflow"
+    required: false
+
+  AWS_ACCESS_KEY_ID:
+    description: "AWS access key ID (only if you can't use AWS_ROLE_ARN)"
+    required: false
+
+  AWS_SECRET_ACCESS_KEY:
+    description: "AWS secret access key (only if you can't use AWS_ROLE_ARN)"
+    required: false
+
   ECR_REGISTRY:
-    description: "AWS ECR registry URL"
+    description: "AWS ECR registry URL (e.g., 123456789012.dkr.ecr.ap-south-1.amazonaws.com)"
     required: true
+
+  PHASE_SERVICE_TOKEN:
+    description: "Phase service token. Leave empty to skip fetching secrets"
+    required: false
+
+  PHASE_APP_ID:
+    description: "Phase app ID (required when PHASE_SERVICE_TOKEN is set)"
+    required: false
+
+  PHASE_ENV:
+    description: "Phase environment to fetch secrets for (e.g., develop, staging, main)"
+    required: false
+
+  PHASE_HOST:
+    description: "Phase host, only needed for self-hosted Phase"
+    required: false
+    default: "https://console.phase.dev"
+
+  ENV_FILE:
+    description: "Path of the .env file to copy to the server, if it exists"
+    required: false
+    default: ".env"
 
 outputs:
   status:
@@ -79,75 +88,87 @@ outputs:
 runs:
   using: "composite"
   steps:
-  - name: Checkout Repository
-    uses: actions/checkout@v5
-    with:
-      ref: ${{ inputs.BRANCH_NAME }}
+    - name: Checkout repository
+      uses: actions/checkout@v5
+      with:
+        ref: ${{ inputs.BRANCH_NAME }}
 
-  - name: Install Teleport CLI
-    uses: teleport-actions/setup@v1
-    with:
-      version: 14.3.19
+    - name: Install Teleport CLI
+      uses: teleport-actions/setup@v1
+      with:
+        version: ${{ inputs.TELEPORT_VERSION }}
 
-  - name: Authenticate with Teleport
-    id: teleport-auth
-    uses: teleport-actions/auth@v1
-    with:
-      proxy: ${{ inputs.TELEPORT_HOST }}
-      token: ${{ inputs.TELEPORT_TOKEN }}
-      certificate-ttl: 2h
-      anonymous-telemetry: 0
+    - name: Authenticate with Teleport
+      id: teleport-auth
+      uses: teleport-actions/auth@v1
+      with:
+        proxy: ${{ inputs.TELEPORT_HOST }}
+        token: ${{ inputs.TELEPORT_TOKEN }}
+        certificate-ttl: 2h
+        anonymous-telemetry: 0
 
-  - name: Configure AWS credentials
-    uses: aws-actions/configure-aws-credentials@v5
-    with:
-      aws-access-key-id: ${{ inputs.AWS_ACCESS_KEY_ID }}
-      aws-secret-access-key: ${{ inputs.AWS_SECRET_ACCESS_KEY }}
-      aws-region: ${{ inputs.AWS_REGION }}
+    # Empty inputs are ignored, so this works with either OIDC or access keys
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v5
+      with:
+        role-to-assume: ${{ inputs.AWS_ROLE_ARN }}
+        aws-access-key-id: ${{ inputs.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ inputs.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ inputs.AWS_REGION }}
 
-  - name: Login to Amazon ECR
-    id: login-ecr
-    uses: aws-actions/amazon-ecr-login@v2
+    - name: Generate .env from Phase
+      if: ${{ inputs.PHASE_SERVICE_TOKEN != '' }}
+      uses: anilrajrimal1/phase-secrets-fetch-action@v1.0.5
+      with:
+        phase_service_token: ${{ inputs.PHASE_SERVICE_TOKEN }}
+        phase_app_id: ${{ inputs.PHASE_APP_ID }}
+        phase_env: ${{ inputs.PHASE_ENV }}
+        phase_host: ${{ inputs.PHASE_HOST }}
 
-  - name: Generate env from Phase
-    uses: anilrajrimal1/phase-secrets-fetch-action@v1.0.5
-    with:
-      phase_service_token: ${{ inputs.PHASE_SERVICE_TOKEN }}
-      phase_app_id: ${{ inputs.PHASE_APP_ID }}
-      phase_env: ${{ inputs.PHASE_ENV }}
-      phase_host: ${{ inputs.PHASE_HOST }}
+    - name: Select compose file for the branch
+      shell: bash
+      env:
+        COMPOSE_FILE_PATH: ${{ inputs.COMPOSE_FILE_PATH }}
+        BRANCH_NAME: ${{ inputs.BRANCH_NAME }}
+      run: cp "${COMPOSE_FILE_PATH}docker-compose.${BRANCH_NAME}.yml" docker-compose.yml
 
-  - name: Copy Compose File to Root
-    shell: bash
-    run: |
-      cp ${{ inputs.COMPOSE_FILE_PATH }}docker-compose.${{ inputs.BRANCH_NAME }}.yml docker-compose.yml
+    - name: Copy files and deploy
+      id: deploy
+      shell: bash
+      env:
+        IDENTITY: ${{ steps.teleport-auth.outputs.identity-file }}
+        TELEPORT_HOST: ${{ inputs.TELEPORT_HOST }}
+        TARGET: ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOSTNAME }}
+        PROJECT_DIR: ${{ inputs.PROJECT_DIR }}
+        ENV_FILE: ${{ inputs.ENV_FILE }}
+        AWS_REGION: ${{ inputs.AWS_REGION }}
+        ECR_REGISTRY: ${{ inputs.ECR_REGISTRY }}
+      run: |
+        set -euo pipefail
 
-  - name: Pull image and Deploy
-    id: deploy
-    shell: bash
-    run: |
-      echo "Copying files to remote server..."
-      tsh scp -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" .env "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOSTNAME }}:${{ inputs.PROJECT_DIR }}/.env"
-      tsh scp -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" docker-compose.yml "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOSTNAME }}:${{ inputs.PROJECT_DIR }}/docker-compose.yml"
+        # Older docs passed a directory (ENV_FILE: "."); treat that as <dir>/.env
+        if [ -d "$ENV_FILE" ]; then ENV_FILE="${ENV_FILE%/}/.env"; fi
 
-      echo "Fetching ECR login credentials..."
-      ECR_PASS=$(aws ecr get-login-password --region "${{ inputs.AWS_REGION }}")
-
-      echo "Deploying on remote server..."
-      tsh ssh -i "${{ steps.teleport-auth.outputs.identity-file }}" --proxy "${{ inputs.TELEPORT_HOST }}" "${{ inputs.SSH_USER }}@${{ inputs.SSH_HOSTNAME }}" << EOF
-        set -e
-        cd "${{ inputs.PROJECT_DIR }}"
-        echo "$ECR_PASS" | docker login --username AWS --password-stdin "${{ inputs.ECR_REGISTRY }}"
-        docker compose --file docker-compose.yml pull
-        docker compose up -d --build --force-recreate
-        if [ $? -ne 0 ]; then
-          echo "Error: Docker compose failed."
-          exit 1
+        echo "Copying files to the remote server..."
+        if [ -f "$ENV_FILE" ]; then
+          tsh scp -i "$IDENTITY" --proxy "$TELEPORT_HOST" "$ENV_FILE" "$TARGET:$PROJECT_DIR/.env"
+        else
+          echo "No $ENV_FILE found, skipping the .env copy"
         fi
-        echo "Containers are up and running!"
-        exit 0
-      EOF
-      echo "status=success" >> "$GITHUB_OUTPUT"
+        tsh scp -i "$IDENTITY" --proxy "$TELEPORT_HOST" docker-compose.yml "$TARGET:$PROJECT_DIR/docker-compose.yml"
+
+        ECR_PASS=$(aws ecr get-login-password --region "$AWS_REGION")
+        echo "::add-mask::$ECR_PASS"
+
+        echo "Deploying on the remote server..."
+        # Quote values locally so the remote shell treats them as literals, not code
+        printf -v Q_DIR '%q' "$PROJECT_DIR"
+        printf -v Q_REGISTRY '%q' "$ECR_REGISTRY"
+        # The ECR password goes over stdin, never on a command line
+        printf '%s\n' "$ECR_PASS" | tsh ssh -i "$IDENTITY" --proxy "$TELEPORT_HOST" "$TARGET" \
+          "set -e; cd $Q_DIR; docker login --username AWS --password-stdin $Q_REGISTRY; docker compose --file docker-compose.yml pull; docker compose up -d --build --force-recreate; echo 'Containers are up and running!'"
+
+        echo "status=success" >> "$GITHUB_OUTPUT"
 
 branding:
   icon: "cloud"
